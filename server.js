@@ -231,13 +231,13 @@ app.get('/run', function(req, res) {
 		getTodayFor('csugden', function(todayText) {
 			if(todayText) {
 				output += "<br>"+todayText;
-				sendTheEmail('jnthnlstr@gmail.com', todayText);
+				sendTheEmail('csugden@gmail.com', todayText);
 			}
 	
 			getTodayFor('joshuwar', function(todayText) {
 				if(todayText) {
 					output += "<br>"+todayText;
-					sendTheEmail('jnthnlstr@gmail.com', todayText);
+					sendTheEmail('josh.u.war@gmail.com', todayText);
 				}
 				res.send(output);
 			});
