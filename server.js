@@ -10,9 +10,9 @@ var request = require('request'),
 	        pass: "temp123"
 	    }
 	}),
-	sendTheEmail = function(body) {
+	sendTheEmail = function(toAddress, body) {
 		smtpTransport.sendMail({
-			to: "jnthnlstr@gmail.com",
+			to: toAddress,
 			from: "robot@attnbang.com",
 			subject: "Do you want to book any more time?",
 			html: body,
@@ -147,7 +147,6 @@ var request = require('request'),
 					periods: []
 				};
 			}
-			console.log(periodDay);
 			if(day.date===periodDay) {
 				day.periods.push(period);
 			} else {
@@ -176,8 +175,38 @@ var request = require('request'),
 			endTime = period.endDate.toString(format);
 			textLines.push(startTime+"-"+endTime+" / "+period.project+ (period.notes ? " / "+period.notes : ""));
 		}
-		text = textLines.join("\n");
+		text = textLines.join("<br>");
 		return text;
+	},
+	getTodayFor = function(username, callback) {
+		var url = "http://attn-test.tiddlyspace.com/search.json?q=bag:attn_"+username+"_*%20_limit:50&fat=1&sort=-title",
+			options = {
+				headers: {
+					'X-ControlView': false
+				},
+				json: true
+			};
+		request.get(url, options, function(error, response) {
+			console.log('GET url: '+url);
+			if(error) {
+				res.send(error);
+			} else {
+				var body = response.body,
+					tiddlers = parseToTiddlers(body),
+					periods = createPeriods(tiddlers),
+					days = daysFromPeriods(periods),
+					// today is the last day in the days array
+					todayPeriods = days[days.length-1],
+					today = (new Date).toString("ddMMyyyy"),
+					text;
+				console.log('today: '+today);
+				console.log('most recent period: '+todayPeriods.date);
+				if(todayPeriods.date===today) {
+					text = periodsToText(todayPeriods.periods);
+				}
+				callback(text);
+			}
+		});
 	};
 
 
@@ -190,31 +219,30 @@ app.get('/', function(req, res){
 });
 app.get('/run', function(req, res) {
 	console.log('running');
-	var username = "jnthnlstr",
-		url = "http://attn-test.tiddlyspace.com/search.json?q=bag:attn_"+username+"_*%20_limit:50&fat=1&sort=-title",
-		options = {
-			headers: {
-				'X-ControlView': false
-			},
-			json: true
-		};
-	request.get(url, options, function(error, response) {
-		console.log('GET url: '+url);
-		if(error) {
-			res.send(error);
-		} else {
-			var body = response.body,
-				tiddlers = parseToTiddlers(body),
-				periods = createPeriods(tiddlers),
-				days = daysFromPeriods(periods),
-				// today is the last day in the days array
-				today = days[days.length-1],
-				text = periodsToText(today.periods);
-			res.send(text);
+	var output = "",
+		todayText;
+	
+	getTodayFor('jnthnlstr', function(todayText) {
+		if(todayText) {
+			output += todayText;
+			sendTheEmail('jnthnlstr@gmail.com', todayText);
 		}
+	
+		getTodayFor('csugden', function(todayText) {
+			if(todayText) {
+				output += "<br>"+todayText;
+				sendTheEmail('jnthnlstr@gmail.com', todayText);
+			}
+	
+			getTodayFor('joshuwar', function(todayText) {
+				if(todayText) {
+					output += "<br>"+todayText;
+					sendTheEmail('jnthnlstr@gmail.com', todayText);
+				}
+				res.send(output);
+			});
+		});
 	});
-
-	//sendTheEmail('test body');
 });
 
 var port = process.env.PORT || 8001;
