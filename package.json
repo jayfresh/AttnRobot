@@ -4,8 +4,14 @@
   "scripts": {
     "start": "node server.js"
   },
-  "version": "0.0.0-1",
+  "version": "0.0.0-2",
   "engines": {
     "node": "0.8.x"
+  },
+  "dependencies": {
+    "request": "*",
+    "nodemailer": "0.3.x",
+    "express": "3.x",
+    "datejs": "*"
   }
 }
