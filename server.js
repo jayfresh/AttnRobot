@@ -1,3 +1,10 @@
+/*
+
+	to add:
+		- your personal total at bottom of email - DONE
+		- how this compares to your previous seven (or whatever) days' average (not including days of 0)
+*/
+
 var request = require('request'),
 	nodemailer = require("nodemailer"),
 	express = require('express'),
@@ -160,6 +167,24 @@ var request = require('request'),
 		days.push(day);
 		return days;
 	},
+	formatDuration = function(duration) {
+		var hours,
+			minutes,
+			seconds;
+		if(!duration) {
+			return {};
+		}
+		seconds = duration / 1000;
+		minutes = seconds / 60;
+		hours = Math.floor(minutes / 60);
+		minutes = Math.floor(minutes % 60);
+		seconds = Math.floor(seconds % 60);
+		return {
+			hours: hours,
+			minutes: minutes,
+			seconds: seconds
+		};
+	},
 	periodsToText = function(periods) {
 		var i,
 			textLines = [],
@@ -167,14 +192,20 @@ var request = require('request'),
 			period,
 			startTime,
 			endTime,
-			format = "HH:mm";
+			format = "HH:mm",
+			total = 0;
 		// run through the periods backwards as we want to show the most recent first
 		for(i=periods.length-1;i>=0;i--) {
 			period = periods[i];
+			total += period.duration;
 			startTime = period.startDate.toString(format);
-			endTime = period.endDate.toString(format);
+			endTime = period.endDate ? period.endDate.toString(format) : "(open)";
 			textLines.push(startTime+"-"+endTime+" / "+period.project+ (period.notes ? " / "+period.notes : ""));
 		}
+		console.log('total', total);
+		total = formatDuration(total);
+		textLines.push("<br>");		
+		textLines.push("Your total for today is: "+total.hours+"h "+total.minutes+"m");
 		text = textLines.join("<br>");
 		return text;
 	},
@@ -202,6 +233,7 @@ var request = require('request'),
 				console.log('today: '+today);
 				console.log('most recent period: '+todayPeriods.date);
 				if(todayPeriods.date===today) {
+					console.log('converting periods, count ',todayPeriods.periods.length);
 					text = periodsToText(todayPeriods.periods);
 				}
 				callback(text);
@@ -220,24 +252,31 @@ app.get('/', function(req, res){
 app.get('/run', function(req, res) {
 	console.log('running');
 	var output = "",
-		todayText;
+		todayText,
+		testMode = process.env.USER==="jonathanlister";
 	
 	getTodayFor('jnthnlstr', function(todayText) {
 		if(todayText) {
 			output += todayText;
-			sendTheEmail('jnthnlstr@gmail.com', todayText);
+			if(!testMode) {
+				sendTheEmail('jnthnlstr@gmail.com', todayText);
+			}
 		}
 	
 		getTodayFor('csugden', function(todayText) {
 			if(todayText) {
 				output += "<br>"+todayText;
-				sendTheEmail('csugden@gmail.com', todayText);
+				if(!testMode) {
+					sendTheEmail('csugden@gmail.com', todayText);
+				}
 			}
 	
 			getTodayFor('joshuwar', function(todayText) {
 				if(todayText) {
 					output += "<br>"+todayText;
-					sendTheEmail('josh.u.war@gmail.com', todayText);
+					if(!testMode) {
+						sendTheEmail('josh.u.war@gmail.com', todayText);
+					}
 				}
 				res.send(output);
 			});
