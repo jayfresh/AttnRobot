@@ -2,7 +2,7 @@
 
 	to add:
 		- your personal total at bottom of email - DONE
-		- how this compares to your previous seven (or whatever) days' average (not including days of 0)
+		- how this compares to the group today, as a percentage
 */
 
 var request = require('request'),
@@ -203,11 +203,14 @@ var request = require('request'),
 			textLines.push(startTime+"-"+endTime+" / "+period.project+ (period.notes ? " / "+period.notes : ""));
 		}
 		console.log('total', total);
-		total = formatDuration(total);
-		textLines.push("<br>");		
-		textLines.push("Your total for today is: "+total.hours+"h "+total.minutes+"m");
+		totalObj = formatDuration(total);
+		textLines.push("<br>");
+		textLines.push("Your total for today is: "+totalObj.hours+"h "+totalObj.minutes+"m");
 		text = textLines.join("<br>");
-		return text;
+		return {
+			text: text,
+			total: total
+		};
 	},
 	getTodayFor = function(username, callback) {
 		var url = "http://attn-test.tiddlyspace.com/search.json?q=bag:attn_"+username+"_*%20_limit:50&fat=1&sort=-title",
@@ -229,14 +232,14 @@ var request = require('request'),
 					// today is the last day in the days array
 					todayPeriods = days[days.length-1],
 					today = (new Date).toString("ddMMyyyy"),
-					text;
+					textAndTotal;
 				console.log('today: '+today);
 				console.log('most recent period: '+todayPeriods.date);
 				if(todayPeriods.date===today) {
 					console.log('converting periods, count ',todayPeriods.periods.length);
-					text = periodsToText(todayPeriods.periods);
+					textAndTotal = periodsToText(todayPeriods.periods);
 				}
-				callback(text);
+				callback(textAndTotal);
 			}
 		});
 	};
@@ -253,31 +256,55 @@ app.get('/run', function(req, res) {
 	console.log('running');
 	var output = "",
 		todayText,
-		testMode = process.env.USER==="jonathanlister";
-	
-	getTodayFor('jnthnlstr', function(todayText) {
-		if(todayText) {
-			output += todayText;
-			if(!testMode) {
-				sendTheEmail('jnthnlstr@gmail.com', todayText);
-			}
-		}
-	
-		getTodayFor('csugden', function(todayText) {
-			if(todayText) {
-				output += "<br>"+todayText;
-				if(!testMode) {
-					sendTheEmail('csugden@gmail.com', todayText);
-				}
-			}
-	
-			getTodayFor('joshuwar', function(todayText) {
-				if(todayText) {
-					output += "<br>"+todayText;
+		testMode = process.env.USER==="jonathanlister",
+		groupTotal = 0,
+		emails = {},
+		sendAllEmails = function() {
+			var name,
+				text,
+				email,
+				personalPercentage;
+			for(name in emails) {
+				if(emails.hasOwnProperty(name)) {
+					email = emails[name];
+					personalPercentage = Math.round((email.total / groupTotal)*100);
+					text = email.text+"<br>You were "+personalPercentage+"% of today's total for the group.";
+					output += text+"<br><br>";
+					console.log('text for '+name+': '+text);
 					if(!testMode) {
-						sendTheEmail('josh.u.war@gmail.com', todayText);
+						sendTheEmail(name, text);
 					}
 				}
+			}
+		};
+	
+	getTodayFor('jnthnlstr', function(textAndTotal) {
+		if(textAndTotal) {
+			emails['jnthnlstr@gmail.com'] = {
+				text: textAndTotal.text,
+				total: textAndTotal.total
+			};
+			groupTotal += textAndTotal.total;
+		}
+	
+		getTodayFor('csugden', function(textAndTotal) {
+			if(textAndTotal) {
+				emails['csugden@gmail.com'] = {
+					text: textAndTotal.text,
+					total: textAndTotal.total
+				};
+				groupTotal += textAndTotal.total;
+			}
+	
+			getTodayFor('joshuwar', function(textAndTotal) {
+				if(textAndTotal) {
+					emails['josh.u.war@gmail.com'] = {
+						text: textAndTotal.text,
+						total: textAndTotal.total
+					};
+					groupTotal += textAndTotal.total;
+				}
+				sendAllEmails();
 				res.send(output);
 			});
 		});
