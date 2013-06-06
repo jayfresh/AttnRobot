@@ -197,7 +197,7 @@ var request = require('request'),
 		// run through the periods backwards as we want to show the most recent first
 		for(i=periods.length-1;i>=0;i--) {
 			period = periods[i];
-			total += period.duration;
+			total += period.duration || 0;
 			startTime = period.startDate.toString(format);
 			endTime = period.endDate ? period.endDate.toString(format) : "(open)";
 			textLines.push(startTime+"-"+endTime+" / "+period.project+ (period.notes ? " / "+period.notes : ""));
@@ -259,16 +259,32 @@ app.get('/run', function(req, res) {
 		testMode = process.env.USER==="jonathanlister",
 		groupTotal = 0,
 		emails = {},
+		createGroupRundown = function() {
+			var breakdown = [],
+				total,
+				totalObj;
+			for(name in emails) {
+				if(emails.hasOwnProperty(name)) {
+					total = emails[name].total;
+					totalObj = formatDuration(total);
+					breakdown.push(name+": "+totalObj.hours+"h "+totalObj.minutes+"m");
+				}
+			}
+			breakdown = breakdown.join("<br>");
+			return breakdown;
+		},
 		sendAllEmails = function() {
 			var name,
 				text,
 				email,
-				personalPercentage;
+				personalPercentage,
+				groupRundown = createGroupRundown();
 			for(name in emails) {
 				if(emails.hasOwnProperty(name)) {
 					email = emails[name];
-					personalPercentage = Math.round((email.total / groupTotal)*100);
-					text = email.text+"<br>You were "+personalPercentage+"% of today's total for the group.";
+					/*personalPercentage = Math.round((email.total / groupTotal)*100);
+					text = email.text+"<br>You were "+personalPercentage+"% of today's total for the group.";*/
+					text = email.text+"<br>Group totals:<br>"+groupRundown;
 					output += text+"<br><br>";
 					console.log('text for '+name+': '+text);
 					if(!testMode) {
