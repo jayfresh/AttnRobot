@@ -1,8 +1,9 @@
 /*
+AttnRobot - v0.4, June 8th 2013
 
-	to add:
-		- your personal total at bottom of email - DONE
-		- how this compares to the group today, as a percentage
+ChangeLog:
+	- 08/06/2013 sends out all emails when anyone in the group books some attn during the day, rather than choosing on a personal level
+	- 05/06/2013 got rid of personal percentage as it wasn't helpful and added group totals
 */
 
 var request = require('request'),
@@ -171,9 +172,6 @@ var request = require('request'),
 		var hours,
 			minutes,
 			seconds;
-		if(!duration) {
-			return {};
-		}
 		seconds = duration / 1000;
 		minutes = seconds / 60;
 		hours = Math.floor(minutes / 60);
@@ -185,7 +183,7 @@ var request = require('request'),
 			seconds: seconds
 		};
 	},
-	periodsToText = function(periods) {
+	periodsToText = function(periods, textAndTotal) {
 		var i,
 			textLines = [],
 			text = "",
@@ -207,10 +205,10 @@ var request = require('request'),
 		textLines.push("<br>");
 		textLines.push("Your total for today is: "+totalObj.hours+"h "+totalObj.minutes+"m");
 		text = textLines.join("<br>");
-		return {
-			text: text,
-			total: total
-		};
+
+		// set properties of the object passed in
+		textAndTotal.text = text;
+		textAndTotal.total = total;
 	},
 	getTodayFor = function(username, callback) {
 		var url = "http://attn-test.tiddlyspace.com/search.json?q=bag:attn_"+username+"_*%20_limit:50&fat=1&sort=-title",
@@ -232,12 +230,16 @@ var request = require('request'),
 					// today is the last day in the days array
 					todayPeriods = days[days.length-1],
 					today = (new Date).toString("ddMMyyyy"),
-					textAndTotal;
+					textAndTotal = {
+						text: "",
+						total: 0
+					};
 				console.log('today: '+today);
 				console.log('most recent period: '+todayPeriods.date);
+				// NB: option for the future, perhaps set todayPeriods to null if today's date isn't the same as the todayPeriods's date, and call periodsToText anyway to make the email text consistent e.g. it would say "your time today is 0h"
 				if(todayPeriods.date===today) {
 					console.log('converting periods, count ',todayPeriods.periods.length);
-					textAndTotal = periodsToText(todayPeriods.periods);
+					periodsToText(todayPeriods.periods, textAndTotal); // this modifies textAndTotal
 				}
 				callback(textAndTotal);
 			}
@@ -295,32 +297,28 @@ app.get('/run', function(req, res) {
 		};
 	
 	getTodayFor('jnthnlstr', function(textAndTotal) {
-		if(textAndTotal) {
-			emails['jnthnlstr@gmail.com'] = {
+		emails['jnthnlstr@gmail.com'] = {
+			text: textAndTotal.text,
+			total: textAndTotal.total
+		};
+		groupTotal += textAndTotal.total;
+	
+		getTodayFor('csugden', function(textAndTotal) {
+			emails['csugden@gmail.com'] = {
 				text: textAndTotal.text,
 				total: textAndTotal.total
 			};
 			groupTotal += textAndTotal.total;
-		}
 	
-		getTodayFor('csugden', function(textAndTotal) {
-			if(textAndTotal) {
-				emails['csugden@gmail.com'] = {
+			getTodayFor('joshuwar', function(textAndTotal) {
+				emails['josh.u.war@gmail.com'] = {
 					text: textAndTotal.text,
 					total: textAndTotal.total
 				};
 				groupTotal += textAndTotal.total;
-			}
-	
-			getTodayFor('joshuwar', function(textAndTotal) {
-				if(textAndTotal) {
-					emails['josh.u.war@gmail.com'] = {
-						text: textAndTotal.text,
-						total: textAndTotal.total
-					};
-					groupTotal += textAndTotal.total;
+				if(groupTotal) {
+					sendAllEmails();				
 				}
-				sendAllEmails();
 				res.send(output);
 			});
 		});
