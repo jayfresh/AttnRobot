@@ -1,7 +1,9 @@
 /*
-AttnRobot - v0.4, June 8th 2013
+AttnRobot - v0.0.5, June 11th 2013
 
 ChangeLog:
+	- 11/06/2013 adds the projects to the group breakdown so everyone can see what the projects that were worked on are
+		- feedback on previous addition - good to see what other people are doing. Feels like a "panopticon", but in a good way!
 	- 08/06/2013 sends out all emails when anyone in the group books some attn during the day, rather than choosing on a personal level
 	- 05/06/2013 got rid of personal percentage as it wasn't helpful and added group totals
 */
@@ -191,11 +193,13 @@ var request = require('request'),
 			startTime,
 			endTime,
 			format = "HH:mm",
-			total = 0;
+			total = 0,
+			projects = [];
 		// run through the periods backwards as we want to show the most recent first
 		for(i=periods.length-1;i>=0;i--) {
 			period = periods[i];
 			total += period.duration || 0;
+			projects.pushUnique(period.project);
 			startTime = period.startDate.toString(format);
 			endTime = period.endDate ? period.endDate.toString(format) : "(open)";
 			textLines.push(startTime+"-"+endTime+" / "+period.project+ (period.notes ? " / "+period.notes : ""));
@@ -209,6 +213,7 @@ var request = require('request'),
 		// set properties of the object passed in
 		textAndTotal.text = text;
 		textAndTotal.total = total;
+		textAndTotal.projects = projects;
 	},
 	getTodayFor = function(username, callback) {
 		var url = "http://attn-test.tiddlyspace.com/search.json?q=bag:attn_"+username+"_*%20_limit:50&fat=1&sort=-title",
@@ -232,7 +237,8 @@ var request = require('request'),
 					today = (new Date).toString("ddMMyyyy"),
 					textAndTotal = {
 						text: "",
-						total: 0
+						total: 0,
+						projects: []
 					};
 				console.log('today: '+today);
 				console.log('most recent period: '+todayPeriods.date);
@@ -268,8 +274,9 @@ app.get('/run', function(req, res) {
 			for(name in emails) {
 				if(emails.hasOwnProperty(name)) {
 					total = emails[name].total;
+					projects = emails[name].projects;
 					totalObj = formatDuration(total);
-					breakdown.push(name+": "+totalObj.hours+"h "+totalObj.minutes+"m");
+					breakdown.push(name+": "+totalObj.hours+"h "+totalObj.minutes+"m"+(projects.length ? " / " : "")+projects.join(" / "));
 				}
 			}
 			breakdown = breakdown.join("<br>");
@@ -297,24 +304,15 @@ app.get('/run', function(req, res) {
 		};
 	
 	getTodayFor('jnthnlstr', function(textAndTotal) {
-		emails['jnthnlstr@gmail.com'] = {
-			text: textAndTotal.text,
-			total: textAndTotal.total
-		};
+		emails['jnthnlstr@gmail.com'] = textAndTotal;
 		groupTotal += textAndTotal.total;
 	
 		getTodayFor('csugden', function(textAndTotal) {
-			emails['csugden@gmail.com'] = {
-				text: textAndTotal.text,
-				total: textAndTotal.total
-			};
+			emails['csugden@gmail.com'] = textAndTotal;
 			groupTotal += textAndTotal.total;
 	
 			getTodayFor('joshuwar', function(textAndTotal) {
-				emails['josh.u.war@gmail.com'] = {
-					text: textAndTotal.text,
-					total: textAndTotal.total
-				};
+				emails['josh.u.war@gmail.com'] = textAndTotal;
 				groupTotal += textAndTotal.total;
 				if(groupTotal) {
 					sendAllEmails();				
@@ -324,6 +322,12 @@ app.get('/run', function(req, res) {
 		});
 	});
 });
+
+Array.prototype.pushUnique = function(item) {
+	if(this.indexOf(item)===-1) {
+		this.push(item);
+	}
+};
 
 var port = process.env.PORT || 8001;
 
