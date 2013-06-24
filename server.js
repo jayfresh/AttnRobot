@@ -289,7 +289,6 @@ app.get('/run', function(req, res) {
 		todayText,
 		testMode = process.env.USER==="jonathanlister",
 		today = (new Date).getDay(),
-		isEndOfWeek = today===5, // 5 is Friday
 		groupTotal = 0,
 		emails = {},
 		createGroupRundown = function() {
@@ -305,60 +304,58 @@ app.get('/run', function(req, res) {
 					breakdown.push(name+": "+totalObj.hours+"h "+totalObj.minutes+"m"+(projects.length ? " / " : "")+projects.join(" / "));
 				}
 			}
-			if(isEndOfWeek || testMode) {
-				// append a table with the week's data
-				var tablePieces = ['<h3>7 day summary</h3><table><thead><tr><th>Person</th>'],
-					tableHTML = "",
-					days,
-					dayPeriods,
-					periodsByDate,
-					dayTotal,
-					weekTotal,
-					i,
-					j,
-					d = new Date(), // should probably copy 'today'
-					week = [],
-					format = "ddMMyyyy";
-				d.setDate(d.getDate()-7);
-				for(i=7;i>0;i--) {
-					d.setDate(d.getDate()+1);
-					week.push(d.toString(format));
-					tablePieces.push('<th>'+d.toString('ddd')+'</th>');
-				}
-				tablePieces.push('<th>Total</th></tr></thead><tbody>');
-				console.log(week);
-				for(name in emails) {
-					if(emails.hasOwnProperty(name)) {
-						tablePieces.push('<td>'+name+'</td>');
-						weekTotal = 0;
-						days = emails[name].lastWeekPeriodsByDate;
-						/* TO-DO: make this bit make use of a function, as it's very similar to above - see periodsToText */
-						for(i=0;i<week.length;i++) {
-							day = days[week[i]];
-							if(day) {
-								console.log('DAY',day);
-								dayPeriods = day.periods;
-								dayTotal = 0;
-								for(j=dayPeriods.length-1;j>=0;j--) {
-									period = dayPeriods[j];
-									dayTotal += period.duration || 0;
-								}
-								totalObj = formatDuration(dayTotal);
-								tablePieces.push('<td>'+totalObj.hours+":"+totalObj.minutes+'</td>');
-								weekTotal += dayTotal;
-							} else {
-								console.log('NO DAY for',week[i]);
-								tablePieces.push('<td>0:0</td>');
-							}
-						}
-						totalObj = formatDuration(weekTotal);
-						tablePieces.push('<td>'+totalObj.hours+":"+totalObj.minutes+'</td></tr><tr>');
-					}
-				}
-				tablePieces.push('</tr></tbody></table>');
-				tableHTML = tablePieces.join('');
-				
+			// append a table with the week's data
+			var tablePieces = ['<h3>7 day summary</h3><table><thead><tr><th>Person</th>'],
+				tableHTML = "",
+				days,
+				dayPeriods,
+				periodsByDate,
+				dayTotal,
+				weekTotal,
+				i,
+				j,
+				d = new Date(), // should probably copy 'today'
+				week = [],
+				format = "ddMMyyyy";
+			d.setDate(d.getDate()-7);
+			for(i=7;i>0;i--) {
+				d.setDate(d.getDate()+1);
+				week.push(d.toString(format));
+				tablePieces.push('<th>'+d.toString('ddd')+'</th>');
 			}
+			tablePieces.push('<th>Total</th></tr></thead><tbody>');
+			console.log(week);
+			for(name in emails) {
+				if(emails.hasOwnProperty(name)) {
+					tablePieces.push('<td>'+name+'</td>');
+					weekTotal = 0;
+					days = emails[name].lastWeekPeriodsByDate;
+					/* TO-DO: make this bit make use of a function, as it's very similar to above - see periodsToText */
+					for(i=0;i<week.length;i++) {
+						day = days[week[i]];
+						if(day) {
+							console.log('DAY',day);
+							dayPeriods = day.periods;
+							dayTotal = 0;
+							for(j=dayPeriods.length-1;j>=0;j--) {
+								period = dayPeriods[j];
+								dayTotal += period.duration || 0;
+							}
+							totalObj = formatDuration(dayTotal);
+							tablePieces.push('<td>'+totalObj.hours+":"+totalObj.minutes+'</td>');
+							weekTotal += dayTotal;
+						} else {
+							console.log('NO DAY for',week[i]);
+							tablePieces.push('<td>0:0</td>');
+						}
+					}
+					totalObj = formatDuration(weekTotal);
+					tablePieces.push('<td>'+totalObj.hours+":"+totalObj.minutes+'</td></tr><tr>');
+				}
+			}
+			tablePieces.push('</tr></tbody></table>');
+			tableHTML = tablePieces.join('');
+
 			breakdown.push(tableHTML);
 			breakdown = breakdown.join("<br>");
 			return breakdown;
