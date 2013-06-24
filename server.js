@@ -1,11 +1,13 @@
 /*
-AttnRobot - v0.0.5, June 11th 2013
+AttnRobot - v0.0.6, June 24th 2013
 
 ChangeLog:
+	- 24/06/2013 adds 7-day summary section at bottom of email
 	- 11/06/2013 adds the projects to the group breakdown so everyone can see what the projects that were worked on are
 		- feedback on previous addition - good to see what other people are doing. Feels like a "panopticon", but in a good way!
 	- 08/06/2013 sends out all emails when anyone in the group books some attn during the day, rather than choosing on a personal level
 	- 05/06/2013 got rid of personal percentage as it wasn't helpful and added group totals
+
 */
 
 var request = require('request'),
@@ -140,35 +142,52 @@ var request = require('request'),
 	},
 	daysFromPeriods = function(periods,format) {
 		var days = [],
+			byDate = {},
 			day,
 			periodDay,
 			period,
-			i;
+			i,
+			oneWeekAgo = new Date();
+		oneWeekAgo.setHours(0);
+		oneWeekAgo.setSeconds(0);
+		oneWeekAgo.setMilliseconds(0);
+		oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
 		format = format || "ddMMyyyy";
 		if(!periods || periods.length===0) {
 			return [];
 		}
 		for(i=0;i<periods.length;i++) {
+			// assume the periods are ordered by date
 			period = periods[i];
-			periodDay = period.startDate.toString(format);
-			if(!day) {
-				day = {
-					date: periodDay,
-					periods: []
-				};
-			}
-			if(day.date===periodDay) {
-				day.periods.push(period);
-			} else {
-				days.push(day);
-				day = {
-					date: periodDay,
-					periods: [period]
-				};
+			// only include periods from the last 7 days
+			if(period.startDate>oneWeekAgo) {
+				periodDay = period.startDate.toString(format);
+				if(!day) {
+					day = {
+						date: periodDay,
+						periods: []
+					};
+				}
+				if(day.date===periodDay) {
+					day.periods.push(period);
+				} else {
+					// this marks a change of day
+					days.push(day);
+					day = {
+						date: periodDay,
+						periods: [period]
+					};
+				}
+				// by this point, day will have been updated to contain the correct properties
+				// it's a bit redundant to always set the day property, but it's not too bad
+				byDate[periodDay] = day;
 			}
 		}
 		days.push(day);
-		return days;
+		return {
+			days: days,
+			byDate: byDate
+		};
 	},
 	formatDuration = function(duration) {
 		var hours,
@@ -185,7 +204,7 @@ var request = require('request'),
 			seconds: seconds
 		};
 	},
-	periodsToText = function(periods, textAndTotal) {
+	periodsToText = function(periods, personPeriods) {
 		var i,
 			textLines = [],
 			text = "",
@@ -211,9 +230,9 @@ var request = require('request'),
 		text = textLines.join("<br>");
 
 		// set properties of the object passed in
-		textAndTotal.text = text;
-		textAndTotal.total = total;
-		textAndTotal.projects = projects;
+		personPeriods.text = text;
+		personPeriods.total = total;
+		personPeriods.projects = projects;
 	},
 	getTodayFor = function(username, callback) {
 		var url = "http://attn-test.tiddlyspace.com/search.json?q=bag:attn_"+username+"_*%20_limit:50&fat=1&sort=-title",
@@ -231,23 +250,27 @@ var request = require('request'),
 				var body = response.body,
 					tiddlers = parseToTiddlers(body),
 					periods = createPeriods(tiddlers),
-					days = daysFromPeriods(periods),
+					daysObj = daysFromPeriods(periods),
+					days = daysObj.days,
 					// today is the last day in the days array
 					todayPeriods = days[days.length-1],
 					today = (new Date).toString("ddMMyyyy"),
-					textAndTotal = {
+					personPeriods = {
 						text: "",
 						total: 0,
+						lastWeekPeriodsByDate: daysObj.byDate,
 						projects: []
 					};
+				console.log('***daysObj***');
+				console.log(daysObj);
 				console.log('today: '+today);
 				console.log('most recent period: '+todayPeriods.date);
 				// NB: option for the future, perhaps set todayPeriods to null if today's date isn't the same as the todayPeriods's date, and call periodsToText anyway to make the email text consistent e.g. it would say "your time today is 0h"
 				if(todayPeriods.date===today) {
 					console.log('converting periods, count ',todayPeriods.periods.length);
-					periodsToText(todayPeriods.periods, textAndTotal); // this modifies textAndTotal
+					periodsToText(todayPeriods.periods, personPeriods); // this modifies personPeriods
 				}
-				callback(textAndTotal);
+				callback(personPeriods);
 			}
 		});
 	};
@@ -265,12 +288,15 @@ app.get('/run', function(req, res) {
 	var output = "",
 		todayText,
 		testMode = process.env.USER==="jonathanlister",
+		today = (new Date).getDay(),
+		isEndOfWeek = today===5, // 5 is Friday
 		groupTotal = 0,
 		emails = {},
 		createGroupRundown = function() {
 			var breakdown = [],
 				total,
-				totalObj;
+				totalObj,
+				name;
 			for(name in emails) {
 				if(emails.hasOwnProperty(name)) {
 					total = emails[name].total;
@@ -279,6 +305,61 @@ app.get('/run', function(req, res) {
 					breakdown.push(name+": "+totalObj.hours+"h "+totalObj.minutes+"m"+(projects.length ? " / " : "")+projects.join(" / "));
 				}
 			}
+			if(isEndOfWeek || testMode) {
+				// append a table with the week's data
+				var tablePieces = ['<h3>7 day summary</h3><table><thead><tr><th>Person</th>'],
+					tableHTML = "",
+					days,
+					dayPeriods,
+					periodsByDate,
+					dayTotal,
+					weekTotal,
+					i,
+					j,
+					d = new Date(), // should probably copy 'today'
+					week = [],
+					format = "ddMMyyyy";
+				d.setDate(d.getDate()-7);
+				for(i=7;i>0;i--) {
+					d.setDate(d.getDate()+1);
+					week.push(d.toString(format));
+					tablePieces.push('<th>'+d.toString('ddd')+'</th>');
+				}
+				tablePieces.push('<th>Total</th></tr></thead><tbody>');
+				console.log(week);
+				for(name in emails) {
+					if(emails.hasOwnProperty(name)) {
+						tablePieces.push('<td>'+name+'</td>');
+						weekTotal = 0;
+						days = emails[name].lastWeekPeriodsByDate;
+						/* TO-DO: make this bit make use of a function, as it's very similar to above - see periodsToText */
+						for(i=0;i<week.length;i++) {
+							day = days[week[i]];
+							if(day) {
+								console.log('DAY',day);
+								dayPeriods = day.periods;
+								dayTotal = 0;
+								for(j=dayPeriods.length-1;j>=0;j--) {
+									period = dayPeriods[j];
+									dayTotal += period.duration || 0;
+								}
+								totalObj = formatDuration(dayTotal);
+								tablePieces.push('<td>'+totalObj.hours+":"+totalObj.minutes+'</td>');
+								weekTotal += dayTotal;
+							} else {
+								console.log('NO DAY for',week[i]);
+								tablePieces.push('<td>0:0</td>');
+							}
+						}
+						totalObj = formatDuration(weekTotal);
+						tablePieces.push('<td>'+totalObj.hours+":"+totalObj.minutes+'</td></tr><tr>');
+					}
+				}
+				tablePieces.push('</tr></tbody></table>');
+				tableHTML = tablePieces.join('');
+				
+			}
+			breakdown.push(tableHTML);
 			breakdown = breakdown.join("<br>");
 			return breakdown;
 		},
@@ -303,17 +384,17 @@ app.get('/run', function(req, res) {
 			}
 		};
 	
-	getTodayFor('jnthnlstr', function(textAndTotal) {
-		emails['jnthnlstr@gmail.com'] = textAndTotal;
-		groupTotal += textAndTotal.total;
+	getTodayFor('jnthnlstr', function(personPeriods) {
+		emails['jnthnlstr@gmail.com'] = personPeriods;
+		groupTotal += personPeriods.total;
 	
-		getTodayFor('csugden', function(textAndTotal) {
-			emails['csugden@gmail.com'] = textAndTotal;
-			groupTotal += textAndTotal.total;
+		getTodayFor('csugden', function(personPeriods) {
+			emails['csugden@gmail.com'] = personPeriods;
+			groupTotal += personPeriods.total;
 	
-			getTodayFor('joshuwar', function(textAndTotal) {
-				emails['josh.u.war@gmail.com'] = textAndTotal;
-				groupTotal += textAndTotal.total;
+			getTodayFor('joshuwar', function(personPeriods) {
+				emails['josh.u.war@gmail.com'] = personPeriods;
+				groupTotal += personPeriods.total;
 				if(groupTotal) {
 					sendAllEmails();				
 				}
