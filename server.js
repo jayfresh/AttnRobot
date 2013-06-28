@@ -1,7 +1,9 @@
 /*
-AttnRobot - v0.0.6, June 24th 2013
+AttnRobot - v0.0.7, June 24th 2013
 
 ChangeLog:
+	- 28/06/2013 v0.0.7
+		- fixes timezone offset when displaying breakdown of periods (requires that the appropriate timezone offset is sent along with the request to reflect the viewer's timezone e.g. http://<app URL>/run?timezoneOffset=-0100)
 	- 24/06/2013 adds 7-day summary section at bottom of email
 	- 11/06/2013 adds the projects to the group breakdown so everyone can see what the projects that were worked on are
 		- feedback on previous addition - good to see what other people are doing. Feels like a "panopticon", but in a good way!
