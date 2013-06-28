@@ -290,8 +290,7 @@ app.get('/run', function(req, res) {
 	var output = "",
 		todayText,
 		timezoneOffset = req.query.timezoneOffset || 0, // assuming server is on UTC
-		//testMode = process.env.USER==="jonathanlister", // DEBUG
-		testMode = true,
+		testMode = process.env.USER==="jonathanlister",
 		today = (new Date).getDay(),
 		groupTotal = 0,
 		emails = {},
