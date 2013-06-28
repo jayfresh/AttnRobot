@@ -204,7 +204,7 @@ var request = require('request'),
 			seconds: seconds
 		};
 	},
-	periodsToText = function(periods, personPeriods) {
+	periodsToText = function(periods, personPeriods, timezoneOffset) {
 		var i,
 			textLines = [],
 			text = "",
@@ -219,8 +219,8 @@ var request = require('request'),
 			period = periods[i];
 			total += period.duration || 0;
 			projects.pushUnique(period.project);
-			startTime = period.startDate.toString(format);
-			endTime = period.endDate ? period.endDate.toString(format) : "(open)";
+			startTime = period.startDate.setTimezoneOffset(timezoneOffset).toString(format);
+			endTime = period.endDate ? period.endDate.setTimezoneOffset(timezoneOffset).toString(format) : "(open)";
 			textLines.push(startTime+"-"+endTime+" / "+period.project+ (period.notes ? " / "+period.notes : ""));
 		}
 		console.log('total', total);
@@ -234,7 +234,7 @@ var request = require('request'),
 		personPeriods.total = total;
 		personPeriods.projects = projects;
 	},
-	getTodayFor = function(username, callback) {
+	getTodayFor = function(username, timezoneOffset, callback) {
 		var url = "http://attn-test.tiddlyspace.com/search.json?q=bag:attn_"+username+"_*%20_limit:50&fat=1&sort=-title",
 			options = {
 				headers: {
@@ -268,7 +268,7 @@ var request = require('request'),
 				// NB: option for the future, perhaps set todayPeriods to null if today's date isn't the same as the todayPeriods's date, and call periodsToText anyway to make the email text consistent e.g. it would say "your time today is 0h"
 				if(todayPeriods.date===today) {
 					console.log('converting periods, count ',todayPeriods.periods.length);
-					periodsToText(todayPeriods.periods, personPeriods); // this modifies personPeriods
+					periodsToText(todayPeriods.periods, personPeriods, timezoneOffset); // this modifies personPeriods
 				}
 				callback(personPeriods);
 			}
@@ -287,7 +287,9 @@ app.get('/run', function(req, res) {
 	console.log('running');
 	var output = "",
 		todayText,
-		testMode = process.env.USER==="jonathanlister",
+		timezoneOffset = req.query.timezoneOffset || 0, // assuming server is on UTC
+		//testMode = process.env.USER==="jonathanlister", // DEBUG
+		testMode = true,
 		today = (new Date).getDay(),
 		groupTotal = 0,
 		emails = {},
@@ -381,15 +383,15 @@ app.get('/run', function(req, res) {
 			}
 		};
 	
-	getTodayFor('jnthnlstr', function(personPeriods) {
+	getTodayFor('jnthnlstr', timezoneOffset, function(personPeriods) {
 		emails['jnthnlstr@gmail.com'] = personPeriods;
 		groupTotal += personPeriods.total;
 	
-		getTodayFor('csugden', function(personPeriods) {
+		getTodayFor('csugden', timezoneOffset, function(personPeriods) {
 			emails['csugden@gmail.com'] = personPeriods;
 			groupTotal += personPeriods.total;
 	
-			getTodayFor('joshuwar', function(personPeriods) {
+			getTodayFor('joshuwar', timezoneOffset, function(personPeriods) {
 				emails['josh.u.war@gmail.com'] = personPeriods;
 				groupTotal += personPeriods.total;
 				if(groupTotal) {
